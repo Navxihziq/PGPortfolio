@@ -11,10 +11,13 @@ from pgportfolio.constants import *
 
 class CoinList(object):
     def __init__(self, end, volume_average_days=1, volume_forward=0):
+        # instantiate a polo obj to request data using api
         self._polo = Poloniex()
-        # connect the internet to accees volumes
+        # getting the last 24hrs trading pair volumes
         vol = self._polo.marketVolume()
+        # getting the curren ticker data for all coins
         ticker = self._polo.marketTicker()
+
         pairs = []
         coins = []
         volumes = []
@@ -32,19 +35,24 @@ class CoinList(object):
                 for c, val in v.items():
                     if c != 'BTC':
                         if k.endswith('_BTC'):
-                            coins.append('reversed_' + c)
                             try:
+                                # reverse the exchange from 'to BTC' to 'from BTC'
+                                # (aka how much BTC it needs to exchange for the other coin)
                                 prices.append(1.0 / float(ticker[k]['last']))
-                            except KeyError:
-                                prices.append(1.0 / float(ticker[reversed_key]['last']))
-                        else:
-                            coins.append(c)
-                            try:
-                                prices.append(float(ticker[k]['last']))
+                                coins.append('reversed_' + c)
                             except KeyError:
                                 prices.append(float(ticker[reversed_key]['last']))
+                                coins.append('reversed_' + c)
+                        else:
+                            try:
+                                # how much
+                                prices.append(float(ticker[k]['last']))
+                                coins.append(c)
+                            except KeyError:
+                                prices.append(1.0 / float(ticker[reversed_key]['last']))
+                                coins.append(c)
                     else:
-                        volumes.append(self.__get_total_volume(pair=reversed_key, global_end=end,
+                        volumes.append(self.__get_total_volume(pair=k, global_end=end,
                                                                days=volume_average_days,
                                                                forward=volume_forward))
         self._df = pd.DataFrame({'coin': coins, 'pair': pairs, 'volume': volumes, 'price': prices})
@@ -67,8 +75,11 @@ class CoinList(object):
 
     # get several days volume
     def __get_total_volume(self, pair, global_end, days, forward):
-        start = global_end - (DAY * days) - forward
-        end = global_end - forward
+        # DAY is a constant denoting how many seconds a day has
+        start = global_end - (DAY * days) - forward     # getting the date (in UNIX time) of the start
+        end = global_end - forward      # the forward variable is shifting the entire volume duration forward
+
+        # requesting data
         chart = self.get_chart_until_success(pair=pair, period=DAY, start=start, end=end)
         result = 0
         for one_day in chart:

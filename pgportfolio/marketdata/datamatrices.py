@@ -53,12 +53,14 @@ class DataMatrices:
             raise ValueError("market {} is not valid".format(market))
         self.__period_length = period
         # portfolio vector memory, [time, assets]
-        self.__PVM = pd.DataFrame(index=self.__global_data.minor_axis,
-                                  columns=self.__global_data.major_axis)
+        # self.__PVM = pd.DataFrame(index=self.__global_data.minor_axis,
+        #                           columns=self.__global_data.major_axis)
+        self.__PVM = pd.DataFrame(index=list(self.__global_data.reset_index()['date'].unique()),
+                                  columns=list(self.__global_data.reset_index()['coin'].unique()))
         self.__PVM = self.__PVM.fillna(1.0 / self.__coin_no)
 
         self._window_size = window_size
-        self._num_periods = len(self.__global_data.minor_axis)
+        self._num_periods = len(self.__global_data.reset_index()['date'].unique())
         self.__divide_data(test_portion, portion_reversed)
 
         self._portion_reversed = portion_reversed
@@ -170,7 +172,7 @@ class DataMatrices:
 
     # volume in y is the volume in next access period
     def get_submatrix(self, ind):
-        return self.__global_data.values[:, :, ind:ind+self._window_size+1]
+        return self.__global_data.to_xarray().to_array()[:, :, ind:ind+self._window_size+1]
 
     def __divide_data(self, test_portion, portion_reversed):
         train_portion = 1 - test_portion

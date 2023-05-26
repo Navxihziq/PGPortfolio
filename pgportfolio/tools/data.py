@@ -119,9 +119,18 @@ def count_periods(start, end, period_length):
 def get_volume_forward(time_span, portion, portion_reversed):
     volume_forward = 0
     if not portion_reversed:
+
         volume_forward = time_span * portion
     return volume_forward
 
+
+def multiindex_fillna(dataframe: pd.DataFrame, method="bfill"):
+    filled_df = dataframe.copy()
+    if method == 'both':
+        filled_df = filled_df.apply(lambda x: x.ffill().bfill())
+    else:
+        filled_df = filled_df.apply(lambda x: x.fillna(method=method))
+    return filled_df
 
 def panel_fillna(panel, type="bfill"):
     """

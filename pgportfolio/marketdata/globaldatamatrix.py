@@ -5,7 +5,7 @@ from __future__ import print_function
 from pgportfolio.marketdata.coinlist import CoinList
 import numpy as np
 import pandas as pd
-from pgportfolio.tools.data import panel_fillna
+from pgportfolio.tools.data import multiindex_fillna
 from pgportfolio.constants import *
 import sqlite3
 from datetime import datetime
@@ -68,10 +68,10 @@ class HistoryManager:
         logging.info("feature type list is %s" % str(features))
         self.__checkperiod(period)
 
-        time_index = pd.to_datetime(list(range(start, end + 1, period)), unit='s')
-        panel = pd.DataFrame(index=pd.MultiIndex.from_product(coins, time_index), columns=features, dtype=np.float32)
-        # panel = pd.Panel(items=features, major_axis=coins, minor_axis=time_index, dtype=np.float32)
-
+        time_range = pd.to_datetime(list(range(start, end + 1, period)), unit='s')
+        index = pd.MultiIndex.from_product([coins, time_range])
+        panel_df = pd.DataFrame(index=index, dtype=np.float32)
+        panel_data = {}
         connection = sqlite3.connect(DATABASE_DIR)
         try:
             for row_number, coin in enumerate(coins):
@@ -115,12 +115,23 @@ class HistoryManager:
                     serial_data = pd.read_sql_query(sql, con=connection,
                                                     parse_dates=["date_norm"],
                                                     index_col="date_norm")
-                    panel.loc[feature, coin, serial_data.index] = serial_data.squeeze()
-                    panel = panel_fillna(panel, "both")
+                    panel_data[(coin, feature)] = serial_data.squeeze()
+
         finally:
             connection.commit()
             connection.close()
-        return panel
+
+        panel_df = pd.DataFrame.from_dict(panel_data, orient='index')
+        panel_df.index = panel_df.index.set_names(['coin', 'feature'])
+        panel_df = panel_df.reset_index()
+        dates = panel_df.columns[2:]
+        panel_df = panel_df.melt(id_vars=['coin', 'feature'], value_vars=dates, var_name='date')
+        panel_df = panel_df.pivot(index=['coin', 'date'], columns='feature', values='value').reset_index()\
+            .set_index(['coin', 'date'])
+
+        panel_df = multiindex_fillna(panel_df, "both")
+
+        return panel_df
 
     # select top coin_number of coins by volume from start to end
     def select_coins(self, start, end):
@@ -138,7 +149,7 @@ class HistoryManager:
                 coins_tuples = cursor.fetchall()
 
                 if len(coins_tuples) != self._coin_number:
-                    logging.error("the sqlite error happend")
+                    logging.error("the sqlite error happened")
             finally:
                 connection.commit()
                 connection.close()
